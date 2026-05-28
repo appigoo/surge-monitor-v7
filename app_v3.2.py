@@ -7,6 +7,10 @@ v3.2 修復清單：
 23. BUG-09 前瞻偏差修正：衰竭跳空(上/下)原用「下一根收盤」(data["Close"].iloc[idx+1])
     判斷反轉 → look-ahead bias，會虛高回測勝率。改用當根 intrabar 證據判斷
     （收盤回吐跳空 + 收盤位置），僅用當根 O/H/L/C，不偷看未來。
+24. 回測加速：
+    (a) _run_backtest_for_ticker 加 @st.cache_data(ttl=300) → 避免每次 rerun 重抓重算。
+    (b) 新增 _prefilter_signals：單一信號未達 min_occ 即剔除，任何含它的組合
+        必不達標。組合數可縮減 ~100x（信號越稀疏效果越大），×3 維度。
 
 v2.0 修復清單：
  1. matched_rank 未定義 NameError → 先初始化為 None
@@ -560,6 +564,19 @@ def _combo_mask(combo: tuple, sig_index: dict,
     return onehot[:, cols].all(axis=1)
 
 
+def _prefilter_signals(all_s: list, sig_index: dict,
+                       onehot: "np.ndarray", valid: "np.ndarray",
+                       min_occ: int) -> list:
+    """
+    SPEED: 組合剪枝。單一信號若連自己都達不到 min_occ 次，
+    任何「包含它」的組合（AND 後只會更少）也一定達不到 → 直接從候選池剔除。
+    這能在組合爆炸前就把搜尋空間大幅縮小（指數級效果）。
+    回傳：通過頻率門檻的信號清單（保持原排序）。
+    """
+    col_counts = (onehot[valid]).sum(axis=0)  # 每個信號在有效列的出現次數
+    return [s for s in all_s if col_counts[sig_index[s]] >= min_occ]
+
+
 # ── FIX BUG-02: 回測勝率排除最後一根 NaN ─────────────────────────────────────
 def _base_signal_combos(df: "pd.DataFrame", min_combo: int, max_combo: int,
                          min_occ: int) -> "pd.DataFrame":
@@ -575,10 +592,11 @@ def _base_signal_combos(df: "pd.DataFrame", min_combo: int, max_combo: int,
     _valid = ~np.isnan(next_close_arr)
 
     all_s, sig_index, onehot = _build_onehot(df)
+    cand_s = _prefilter_signals(all_s, sig_index, onehot, _valid, min_occ)
 
     rows = []
-    for r in range(min_combo, min(max_combo + 1, len(all_s) + 1)):
-        for combo in combinations(all_s, r):
+    for r in range(min_combo, min(max_combo + 1, len(cand_s) + 1)):
+        for combo in combinations(cand_s, r):
             mask    = _combo_mask(combo, sig_index, onehot) & _valid
             n_hit   = int(mask.sum())
             if n_hit < min_occ:
@@ -618,10 +636,11 @@ def _signal_x_volume_combos(df: "pd.DataFrame", min_combo: int, max_combo: int,
     vol_縮量 = (vol_arr == "縮量")
 
     all_s, sig_index, onehot = _build_onehot(df)
+    cand_s = _prefilter_signals(all_s, sig_index, onehot, _valid, min_occ)
 
     rows = []
-    for r in range(min_combo, min(max_combo + 1, len(all_s) + 1)):
-        for combo in combinations(all_s, r):
+    for r in range(min_combo, min(max_combo + 1, len(cand_s) + 1)):
+        for combo in combinations(cand_s, r):
             base_mask = _combo_mask(combo, sig_index, onehot) & _valid
             n_base    = int(base_mask.sum())
             if n_base < min_occ:
@@ -668,10 +687,11 @@ def _signal_x_kline_combos(df: "pd.DataFrame", min_combo: int, max_combo: int,
     kline_masks = {kl: (kline_arr == kl) for kl in kline_vals}
 
     all_s, sig_index, onehot = _build_onehot(df)
+    cand_s = _prefilter_signals(all_s, sig_index, onehot, _valid, min_occ)
 
     rows = []
-    for r in range(min_combo, min(max_combo + 1, len(all_s) + 1)):
-        for combo in combinations(all_s, r):
+    for r in range(min_combo, min(max_combo + 1, len(cand_s) + 1)):
+        for combo in combinations(cand_s, r):
             base_mask = _combo_mask(combo, sig_index, onehot) & _valid
             n_base    = int(base_mask.sum())
             if n_base < min_occ:
@@ -1408,6 +1428,7 @@ def _tg_editor(ticker: str) -> pd.DataFrame:
 
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def _run_backtest_for_ticker(
     tk: str,
     period: str,
