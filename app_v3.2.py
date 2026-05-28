@@ -1236,9 +1236,9 @@ with st.sidebar:
     VP_TOP_N         = st.number_input("顯示前 N",   1,   5,   3,  1)
     VP_SHOW          = st.checkbox("標記密集區", True)
     st.subheader("回測")
-    BT_MIN_COMBO     = st.number_input("最少組合數", 2, 3, 2, 1)
-    BT_MAX_COMBO     = st.number_input("最多組合數", 2, 5, 3, 1)
-    BT_MIN_OCC       = st.number_input("最少次數",   2, 10, 3, 1)
+    BT_MIN_COMBO     = st.number_input("最少組合數", 2, 3, 3, 1)
+    BT_MAX_COMBO     = st.number_input("最多組合數", 2, 5, 5, 1)
+    BT_MIN_OCC       = st.number_input("最少次數",   2, 10, 10, 1)
     st.subheader("刷新")
     REFRESH_INTERVAL = st.selectbox("刷新間隔 (秒)", [30, 60, 90, 120, 180, 300], index=4)
 
