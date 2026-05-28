@@ -2578,9 +2578,9 @@ for tab_idx, ticker in enumerate(selected_tickers):
                 bt_occ    = col_c.number_input("最少出現次數",   2, 20, int(BT_MIN_OCC),  1, key=f"bt_occ_{ticker}")
 
                 col_d, col_e, _ = st.columns([1, 1, 1])
-                bt_wr_thr  = col_d.number_input("高勝率閾值 (%)", 50, 95, 60, 5, key=f"bt_wr_thr_{ticker}")
+                bt_wr_thr  = col_d.number_input("高勝率閾值 (%)", 50, 95, 85, 5, key=f"bt_wr_thr_{ticker}")
                 bt_pnl_thr = col_e.number_input(
-                    "最低平均盈虧 (%)", -10.0, 20.0, 0.0, 0.1,
+                    "最低平均盈虧 (%)", -10.0, 20.0, 1.0, 0.1,
                     key=f"bt_pnl_thr_{ticker}", format="%.1f",
                 )
 
